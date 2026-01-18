@@ -1,9 +1,16 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Menu, X, User, Heart, ShoppingBag } from 'lucide-react';
+import { Menu, X, User, Heart, LayoutDashboard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 interface NavbarProps {
   isLoggedIn?: boolean;
@@ -55,18 +62,39 @@ const Navbar = ({ isLoggedIn = false }: NavbarProps) => {
           <div className="hidden md:flex items-center gap-4">
             {isLoggedIn ? (
               <>
-                <Button variant="ghost" size="icon">
-                  <Heart className="h-5 w-5" />
-                </Button>
-                <Button variant="ghost" size="icon">
-                  <ShoppingBag className="h-5 w-5" />
-                </Button>
-                <motion.div
-                  whileHover={{ scale: 1.05 }}
-                  className="w-10 h-10 rounded-full bg-primary flex items-center justify-center cursor-pointer"
-                >
-                  <User className="h-5 w-5 text-primary-foreground" />
-                </motion.div>
+                <Link to="/dashboard?tab=favorites">
+                  <Button variant="ghost" size="icon">
+                    <Heart className="h-5 w-5" />
+                  </Button>
+                </Link>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      className="w-10 h-10 rounded-full bg-primary flex items-center justify-center cursor-pointer"
+                    >
+                      <User className="h-5 w-5 text-primary-foreground" />
+                    </motion.button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-48">
+                    <DropdownMenuItem asChild>
+                      <Link to="/dashboard" className="flex items-center gap-2 cursor-pointer">
+                        <LayoutDashboard className="h-4 w-4" />
+                        האזור האישי
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link to="/dashboard?tab=favorites" className="flex items-center gap-2 cursor-pointer">
+                        <Heart className="h-4 w-4" />
+                        שמלות שאהבתי
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem className="text-destructive cursor-pointer">
+                      התנתקות
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </>
             ) : (
               <Link to="/login">
@@ -111,13 +139,23 @@ const Navbar = ({ isLoggedIn = false }: NavbarProps) => {
               ))}
               <div className="border-t border-border pt-4 mt-2">
                 {isLoggedIn ? (
-                  <div className="flex items-center gap-4">
-                    <Button variant="ghost" size="icon">
+                  <div className="flex flex-col gap-2">
+                    <Link 
+                      to="/dashboard" 
+                      onClick={() => setIsOpen(false)}
+                      className="flex items-center gap-2 py-2 text-lg font-medium"
+                    >
+                      <LayoutDashboard className="h-5 w-5" />
+                      האזור האישי
+                    </Link>
+                    <Link 
+                      to="/dashboard?tab=favorites" 
+                      onClick={() => setIsOpen(false)}
+                      className="flex items-center gap-2 py-2 text-lg font-medium"
+                    >
                       <Heart className="h-5 w-5" />
-                    </Button>
-                    <Button variant="ghost" size="icon">
-                      <ShoppingBag className="h-5 w-5" />
-                    </Button>
+                      שמלות שאהבתי
+                    </Link>
                   </div>
                 ) : (
                   <Link to="/login" onClick={() => setIsOpen(false)}>
