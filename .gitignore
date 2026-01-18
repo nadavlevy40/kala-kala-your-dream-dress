@@ -7,9 +7,25 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Dependencies
 node_modules
+.pnp
+.pnp.js
+
+# Testing
+coverage
+
+# Production Build
 dist
 dist-ssr
+build
+
+# Environment Variables (CRITICAL - Keeps your keys safe)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 *.local
 
 # Editor directories and files
@@ -22,3 +38,10 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# OS Generated Files
+.DS_Store
+Thumbs.db
+
+# Supabase CLI (if used in the future)
+supabase/.temp
