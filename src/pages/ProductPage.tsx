@@ -1,290 +1,332 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Heart, MapPin, Star, Tag, Ruler, Sparkles, ChevronLeft, ChevronRight, Phone, Eye, EyeOff } from 'lucide-react';
+import { Heart, MapPin, ChevronRight, Ruler, Tag, Sparkles, MessageCircle, Share2, Phone } from 'lucide-react';
 import Layout from '@/components/layout/Layout';
 import { Button } from '@/components/ui/button';
-import { dresses } from '@/data/mockData';
-import { cn } from '@/lib/utils';
-
-// WhatsApp icon component
-const WhatsAppIcon = ({ className }: { className?: string }) => (
-  <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
-    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
-  </svg>
-);
+import { dresses as mockDresses, Dress } from '@/data/mockData';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const ProductPage = () => {
-  const { id } = useParams();
-  const dress = dresses.find((d) => d.id === id);
+  const { id } = useParams<{ id: string }>();
+  const { toast } = useToast();
+  
+  const [product, setProduct] = useState<Dress | null>(null);
+  const [loading, setLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState(0);
   const [isLiked, setIsLiked] = useState(false);
-  const [showPhone, setShowPhone] = useState(false);
+  const [sellerPhone, setSellerPhone] = useState<string>('');
 
-  if (!dress) {
+  useEffect(() => {
+    window.scrollTo(0, 0);
+    fetchProduct();
+  }, [id]);
+
+  const fetchProduct = async () => {
+    if (!id) return;
+
+    // 1. בדיקה אם זה מוצר אמיתי מ-Supabase
+    if (id.startsWith('real-')) {
+      const realIdString = id.replace('real-', '');
+      const realId = parseInt(realIdString); // <--- התיקון כאן: המרה למספר
+
+      if (isNaN(realId)) {
+         setLoading(false);
+         return;
+      }
+
+      try {
+        setLoading(true);
+        
+        // שליפת השמלה + פרטי המוכרת (באמצעות join)
+        const { data: listing, error } = await supabase
+          .from('listings')
+          .select(`
+            *,
+            profiles:user_id (
+              full_name,
+              avatar_url,
+              phone,
+              city
+            )
+          `)
+          .eq('id', realId) // עכשיו זה מספר תקין
+          .single();
+
+        if (error) throw error;
+
+        if (listing) {
+          // המרת הנתונים למבנה של האתר
+          const profile = listing.profiles as any;
+          const mappedProduct: Dress = {
+            id: id,
+            title: listing.title,
+            designer: listing.designer || 'לא ידוע',
+            price: listing.price,
+            originalPrice: listing.price * 1.3,
+            size: Number(listing.size) || 38,
+            condition: listing.condition as any || 'משומש',
+            silhouette: 'A-Line',
+            location: listing.location || profile?.city || 'ישראל',
+            description: listing.description || '',
+            images: listing.image_url ? [listing.image_url] : ['/placeholder.svg'],
+            seller: {
+              name: profile?.full_name || 'מוכרת מהאתר',
+              avatar: profile?.avatar_url || 'https://api.dicebear.com/7.x/avataaars/svg?seed=user',
+              location: profile?.city || listing.location || 'ישראל',
+              phone: profile?.phone || '',
+              rating: 5.0,
+            },
+            createdAt: listing.created_at,
+          };
+          
+          setProduct(mappedProduct);
+          setSellerPhone(profile?.phone || '');
+        }
+      } catch (error) {
+        console.error('Error fetching product:', error);
+        toast({
+          variant: "destructive",
+          title: "שגיאה",
+          description: "לא הצלחנו לטעון את פרטי השמלה",
+        });
+      } finally {
+        setLoading(false);
+      }
+    } 
+    // 2. אם זה לא אמיתי - נחפש במוק
+    else {
+      const mockProduct = mockDresses.find((d) => d.id === id);
+      setProduct(mockProduct || null);
+      if (mockProduct) setSellerPhone(mockProduct.seller.phone);
+      setLoading(false);
+    }
+  };
+
+  const handleWhatsAppClick = () => {
+    if (!sellerPhone) {
+      toast({
+        title: "מספר חסר",
+        description: "למוכרת זו אין מספר טלפון מעודכן במערכת.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    const message = `היי ${product?.seller.name}, ראיתי את השמלה שלך (${product?.title}) באתר "כלה קלה" ואשמח לפרטים נוספים.`;
+    const url = `https://wa.me/${sellerPhone}?text=${encodeURIComponent(message)}`;
+    window.open(url, '_blank');
+  };
+
+  if (loading) {
     return (
       <Layout>
-        <div className="container mx-auto px-4 py-20 text-center">
-          <h1 className="text-2xl font-bold mb-4">השמלה לא נמצאה</h1>
-          <Link to="/buy">
-            <Button>חזרה לחנות</Button>
-          </Link>
+        <div className="container mx-auto px-4 py-12 max-w-7xl">
+           <div className="grid lg:grid-cols-2 gap-12">
+             <Skeleton className="h-[600px] w-full rounded-3xl" />
+             <div className="space-y-6">
+               <Skeleton className="h-8 w-1/3" />
+               <Skeleton className="h-12 w-3/4" />
+               <Skeleton className="h-24 w-full" />
+             </div>
+           </div>
         </div>
       </Layout>
     );
   }
 
-  const discount = dress.originalPrice 
-    ? Math.round(((dress.originalPrice - dress.price) / dress.originalPrice) * 100)
-    : 0;
-
-  const nextImage = () => {
-    setSelectedImage((prev) => (prev + 1) % dress.images.length);
-  };
-
-  const prevImage = () => {
-    setSelectedImage((prev) => (prev - 1 + dress.images.length) % dress.images.length);
-  };
-
-  // Format phone for WhatsApp (remove leading 0, add Israel code)
-  const formatPhoneForWhatsApp = (phone: string) => {
-    const cleaned = phone.replace(/\D/g, '');
-    if (cleaned.startsWith('0')) {
-      return '972' + cleaned.substring(1);
-    }
-    return cleaned;
-  };
-
-  const whatsappUrl = `https://wa.me/${formatPhoneForWhatsApp(dress.seller.phone)}?text=${encodeURIComponent(`היי! ראיתי את השמלה "${dress.title}" שלך באתר כלה קלה ואשמח לשמוע עוד פרטים 💕`)}`;
+  if (!product) {
+    return (
+      <Layout>
+        <div className="min-h-[60vh] flex flex-col items-center justify-center">
+          <h2 className="text-2xl font-bold mb-4">המוצר לא נמצא</h2>
+          <Button onClick={() => window.history.back()}>חזרה לקטלוג</Button>
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>
-      <div className="min-h-screen bg-background py-8">
-        <div className="container mx-auto px-4">
-          {/* Breadcrumb */}
-          <nav className="mb-6">
-            <ol className="flex items-center gap-2 text-sm text-muted-foreground">
-              <li><Link to="/" className="hover:text-primary">דף הבית</Link></li>
-              <li>/</li>
-              <li><Link to="/buy" className="hover:text-primary">שמלות</Link></li>
-              <li>/</li>
-              <li className="text-foreground">{dress.title}</li>
-            </ol>
-          </nav>
+      <div className="min-h-screen bg-gradient-to-b from-cream to-background">
+        {/* Breadcrumb */}
+        <div className="border-b border-border/50 bg-white/50 backdrop-blur-sm sticky top-0 z-10">
+          <div className="container mx-auto px-4 py-4">
+            <Link
+              to="/buy"
+              className="inline-flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors"
+            >
+              <ChevronRight className="w-4 h-4" />
+              <span>חזרה לקטלוג</span>
+            </Link>
+          </div>
+        </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-            {/* Image Gallery - Right side in RTL */}
+        <div className="container mx-auto px-4 py-12 max-w-7xl">
+          <div className="grid lg:grid-cols-2 gap-12">
+            
+            {/* Right Side - Images */}
             <motion.div
-              initial={{ opacity: 0, x: 20 }}
+              initial={{ opacity: 0, x: 30 }}
               animate={{ opacity: 1, x: 0 }}
               className="order-1 lg:order-2"
             >
-              <div className="relative aspect-[3/4] rounded-2xl overflow-hidden bg-cream mb-4">
+              <div className="relative aspect-[3/4] rounded-3xl overflow-hidden mb-4 bg-white shadow-soft">
                 <img
-                  src={dress.images[selectedImage]}
-                  alt={dress.title}
+                  src={product.images[selectedImage]}
+                  alt={product.title}
                   className="w-full h-full object-cover"
                 />
-                
-                {/* Navigation Arrows */}
-                {dress.images.length > 1 && (
-                  <>
-                    <button
-                      onClick={prevImage}
-                      className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-background/90 flex items-center justify-center hover:bg-background transition-colors"
-                    >
-                      <ChevronLeft className="h-5 w-5" />
-                    </button>
-                    <button
-                      onClick={nextImage}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-background/90 flex items-center justify-center hover:bg-background transition-colors"
-                    >
-                      <ChevronRight className="h-5 w-5" />
-                    </button>
-                  </>
-                )}
-
-                {/* Like Button */}
-                <motion.button
-                  whileTap={{ scale: 0.9 }}
-                  onClick={() => setIsLiked(!isLiked)}
-                  className={cn(
-                    'absolute top-4 left-4 w-12 h-12 rounded-full flex items-center justify-center transition-all',
-                    isLiked 
-                      ? 'bg-primary text-primary-foreground' 
-                      : 'bg-background/90 text-foreground hover:bg-primary hover:text-primary-foreground'
-                  )}
-                >
-                  <Heart className={cn('h-6 w-6', isLiked && 'fill-current')} />
-                </motion.button>
-
-                {/* Discount Badge */}
-                {discount > 0 && (
-                  <div className="absolute top-4 right-4 bg-destructive text-destructive-foreground px-4 py-2 rounded-full font-bold">
-                    -{discount}% הנחה
-                  </div>
-                )}
+                <button className="absolute top-4 left-4 w-12 h-12 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-md hover:bg-white transition-colors">
+                  <Share2 className="w-5 h-5 text-secondary" />
+                </button>
               </div>
 
-              {/* Thumbnails */}
-              <div className="flex gap-3">
-                {dress.images.map((image, index) => (
-                  <button
-                    key={index}
-                    onClick={() => setSelectedImage(index)}
-                    className={cn(
-                      'w-20 h-24 rounded-lg overflow-hidden border-2 transition-all',
-                      selectedImage === index 
-                        ? 'border-primary' 
-                        : 'border-transparent hover:border-primary/50'
-                    )}
-                  >
-                    <img
-                      src={image}
-                      alt={`${dress.title} ${index + 1}`}
-                      className="w-full h-full object-cover"
-                    />
-                  </button>
-                ))}
-              </div>
+              {product.images.length > 1 && (
+                <div className="grid grid-cols-4 gap-3">
+                  {product.images.map((image, index) => (
+                    <button
+                      key={index}
+                      onClick={() => setSelectedImage(index)}
+                      className={`
+                        aspect-square rounded-xl overflow-hidden transition-all border-2
+                        ${selectedImage === index 
+                          ? 'border-primary opacity-100' 
+                          : 'border-transparent opacity-60 hover:opacity-100'}
+                      `}
+                    >
+                      <img src={image} alt="" className="w-full h-full object-cover" />
+                    </button>
+                  ))}
+                </div>
+              )}
             </motion.div>
 
-            {/* Product Info - Left side in RTL */}
+            {/* Left Side - Details */}
             <motion.div
-              initial={{ opacity: 0, x: -20 }}
+              initial={{ opacity: 0, x: -30 }}
               animate={{ opacity: 1, x: 0 }}
               className="order-2 lg:order-1"
             >
-              <div className="sticky top-24">
-                <h1 className="text-3xl md:text-4xl font-bold mb-3">{dress.title}</h1>
-                <p className="text-xl text-muted-foreground mb-6">{dress.designer}</p>
-
-                {/* Price */}
-                <div className="flex items-center gap-4 mb-8">
-                  <span className="text-4xl font-bold text-primary">
-                    ₪{dress.price.toLocaleString()}
-                  </span>
-                  {dress.originalPrice && (
-                    <span className="text-xl text-muted-foreground line-through">
-                      ₪{dress.originalPrice.toLocaleString()}
-                    </span>
-                  )}
-                </div>
-
-                {/* Quick Info */}
-                <div className="grid grid-cols-2 gap-4 mb-8">
-                  <div className="flex items-center gap-3 p-4 bg-cream rounded-xl">
-                    <Ruler className="h-5 w-5 text-primary" />
-                    <div>
-                      <p className="text-sm text-muted-foreground">מידה</p>
-                      <p className="font-semibold">{dress.size}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 p-4 bg-cream rounded-xl">
-                    <Sparkles className="h-5 w-5 text-primary" />
-                    <div>
-                      <p className="text-sm text-muted-foreground">מצב</p>
-                      <p className="font-semibold">{dress.condition}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 p-4 bg-cream rounded-xl">
-                    <MapPin className="h-5 w-5 text-primary" />
-                    <div>
-                      <p className="text-sm text-muted-foreground">מיקום</p>
-                      <p className="font-semibold">{dress.location}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 p-4 bg-cream rounded-xl">
-                    <Tag className="h-5 w-5 text-primary" />
-                    <div>
-                      <p className="text-sm text-muted-foreground">סגנון</p>
-                      <p className="font-semibold">{dress.silhouette}</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Description */}
-                <div className="mb-8">
-                  <h3 className="font-semibold mb-3">תיאור</h3>
-                  <p className="text-muted-foreground leading-relaxed">{dress.description}</p>
-                </div>
-
-                {/* Seller Card */}
-                <div className="bg-cream rounded-xl p-6 mb-8">
-                  <div className="flex items-center gap-4 mb-4">
-                    <img
-                      src={dress.seller.avatar}
-                      alt={dress.seller.name}
-                      className="w-14 h-14 rounded-full"
-                    />
-                    <div>
-                      <h4 className="font-semibold">{dress.seller.name}</h4>
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <MapPin className="h-4 w-4" />
-                        {dress.seller.location}
-                      </div>
-                    </div>
-                    <div className="mr-auto flex items-center gap-1 bg-background px-3 py-1 rounded-full">
-                      <Star className="h-4 w-4 text-primary fill-primary" />
-                      <span className="font-medium">{dress.seller.rating}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Action Buttons - WhatsApp Integration */}
-                <div className="flex flex-col gap-4">
-                  {/* WhatsApp Button - Primary CTA */}
-                  <motion.a
-                    href={whatsappUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    className="flex items-center justify-center gap-3 bg-[#25D366] hover:bg-[#20BD5A] text-white font-semibold py-4 px-6 rounded-xl shadow-lg transition-colors"
+              {/* Header Info */}
+              <div className="mb-8">
+                <p className="text-primary font-medium mb-2">{product.designer}</p>
+                <div className="flex items-start justify-between gap-4">
+                  <h1 className="text-3xl md:text-4xl font-bold text-secondary mb-3">{product.title}</h1>
+                  <button
+                    onClick={() => setIsLiked(!isLiked)}
+                    className={`
+                      w-12 h-12 rounded-full flex-shrink-0 flex items-center justify-center transition-all
+                      ${isLiked 
+                        ? 'bg-primary text-white' 
+                        : 'bg-cream text-muted-foreground hover:bg-border'}
+                    `}
                   >
-                    <WhatsAppIcon className="h-6 w-6" />
-                    שליחת הודעה למוכרת
-                  </motion.a>
+                    <Heart className={`w-6 h-6 ${isLiked ? 'fill-current' : ''}`} />
+                  </button>
+                </div>
+                <p className="text-sm text-muted-foreground">פורסם ב: {new Date(product.createdAt).toLocaleDateString('he-IL')}</p>
+              </div>
 
-                  {/* Show Phone Button */}
-                  <Button 
-                    variant="outline" 
-                    size="xl" 
-                    className="w-full gap-2"
-                    onClick={() => setShowPhone(!showPhone)}
-                  >
-                    {showPhone ? (
-                      <>
-                        <EyeOff className="h-5 w-5" />
-                        הסתרת מספר טלפון
-                      </>
-                    ) : (
-                      <>
-                        <Eye className="h-5 w-5" />
-                        הצגת מספר טלפון
-                      </>
-                    )}
-                  </Button>
+              {/* Price */}
+              <div className="flex items-baseline gap-4 mb-8 pb-8 border-b border-border">
+                <span className="text-4xl font-bold text-primary">₪{product.price.toLocaleString()}</span>
+                {product.originalPrice && (
+                  <span className="text-xl text-muted-foreground line-through">₪{product.originalPrice.toLocaleString()}</span>
+                )}
+                <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-medium">
+                  חיסכון ענק
+                </span>
+              </div>
 
-                  {/* Phone Number Display */}
-                  {showPhone && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="bg-cream rounded-xl p-4 text-center"
-                    >
-                      <p className="text-sm text-muted-foreground mb-1">מספר הטלפון של המוכרת:</p>
-                      <a 
-                        href={`tel:${dress.seller.phone}`}
-                        className="text-xl font-bold text-primary flex items-center justify-center gap-2 ltr"
-                      >
-                        <Phone className="h-5 w-5" />
-                        {dress.seller.phone}
-                      </a>
-                    </motion.div>
-                  )}
+              {/* Specs Grid */}
+              <div className="grid grid-cols-2 gap-4 mb-8">
+                <div className="flex items-center gap-3 p-4 bg-cream rounded-2xl">
+                  <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center text-primary">
+                    <Ruler className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">מידה</p>
+                    <p className="font-semibold">{product.size}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 p-4 bg-cream rounded-2xl">
+                  <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center text-primary">
+                    <Tag className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">מצב</p>
+                    <p className="font-semibold">{product.condition}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 p-4 bg-cream rounded-2xl">
+                  <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center text-primary">
+                    <MapPin className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">מיקום</p>
+                    <p className="font-semibold">{product.location}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 p-4 bg-cream rounded-2xl">
+                  <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center text-primary">
+                    <Sparkles className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">בד/חומר</p>
+                    <p className="font-semibold">תחרה/משי</p>
+                  </div>
                 </div>
               </div>
+
+              {/* Description */}
+              <div className="mb-8">
+                <h3 className="font-semibold text-lg mb-3">תיאור השמלה</h3>
+                <p className="text-muted-foreground leading-relaxed whitespace-pre-line">
+                  {product.description}
+                </p>
+              </div>
+
+              {/* Seller Card */}
+              <div className="bg-gradient-to-br from-cream to-transparent rounded-2xl p-6 mb-8 border border-border/50">
+                <p className="text-sm text-muted-foreground mb-4">המוכרת</p>
+                <div className="flex items-center gap-4">
+                  <img
+                    src={product.seller.avatar}
+                    alt={product.seller.name}
+                    className="w-14 h-14 rounded-full object-cover border-2 border-white shadow-sm"
+                  />
+                  <div>
+                    <h4 className="font-semibold text-lg">{product.seller.name}</h4>
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <span>{product.seller.location}</span>
+                      <span>•</span>
+                      <span>⭐ {product.seller.rating}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-4 flex-col sm:flex-row">
+                <Button 
+                  onClick={handleWhatsAppClick}
+                  variant="gold" 
+                  size="xl" 
+                  className="flex-1 bg-[#25D366] hover:bg-[#128C7E] border-none text-white shadow-lg shadow-green-900/10"
+                >
+                  <MessageCircle className="w-5 h-5 ml-2" />
+                  שלחי הודעה ב-WhatsApp
+                </Button>
+                
+                <Button variant="outline" size="xl" className="flex-1 border-primary text-primary hover:bg-primary/5">
+                  <Phone className="w-5 h-5 ml-2" />
+                  הצג טלפון
+                </Button>
+              </div>
+
             </motion.div>
           </div>
         </div>

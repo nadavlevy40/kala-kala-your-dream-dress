@@ -45,3 +45,4 @@ Thumbs.db
 
 # Supabase CLI (if used in the future)
 supabase/.temp
+.env

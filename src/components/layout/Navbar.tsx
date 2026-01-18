@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Menu, X, User, Heart, LayoutDashboard } from 'lucide-react';
+import { Menu, X, User, Heart, LayoutDashboard, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import {
@@ -11,6 +11,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 
 interface NavbarProps {
   isLoggedIn?: boolean;
@@ -19,6 +21,8 @@ interface NavbarProps {
 const Navbar = ({ isLoggedIn = false }: NavbarProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
+  const { toast } = useToast();
 
   const navLinks = [
     { href: '/buy', label: 'קניית שמלה' },
@@ -27,6 +31,14 @@ const Navbar = ({ isLoggedIn = false }: NavbarProps) => {
   ];
 
   const isActive = (path: string) => location.pathname === path;
+
+  // פונקציית התנתקות
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    toast({ title: "התנתקת בהצלחה", description: "נתראה בקרוב!" });
+    navigate('/');
+    setIsOpen(false);
+  };
 
   return (
     <nav className="fixed top-0 right-0 left-0 z-50 bg-background/95 backdrop-blur-md border-b border-border">
@@ -67,30 +79,39 @@ const Navbar = ({ isLoggedIn = false }: NavbarProps) => {
                     <Heart className="h-5 w-5" />
                   </Button>
                 </Link>
+                
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <motion.button
                       whileHover={{ scale: 1.05 }}
-                      className="w-10 h-10 rounded-full bg-primary flex items-center justify-center cursor-pointer"
+                      className="w-10 h-10 rounded-full bg-primary flex items-center justify-center cursor-pointer shadow-md hover:shadow-lg transition-all"
                     >
                       <User className="h-5 w-5 text-primary-foreground" />
                     </motion.button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" className="w-48">
+                  <DropdownMenuContent align="end" className="w-56 p-2">
+                    <div className="px-2 py-1.5 text-sm font-semibold text-muted-foreground">
+                      החשבון שלי
+                    </div>
+                    <DropdownMenuSeparator />
                     <DropdownMenuItem asChild>
-                      <Link to="/dashboard" className="flex items-center gap-2 cursor-pointer">
+                      <Link to="/dashboard" className="flex items-center gap-2 cursor-pointer w-full">
                         <LayoutDashboard className="h-4 w-4" />
-                        האזור האישי
+                        ניהול שמלות ופרופיל
                       </Link>
                     </DropdownMenuItem>
                     <DropdownMenuItem asChild>
-                      <Link to="/dashboard?tab=favorites" className="flex items-center gap-2 cursor-pointer">
+                      <Link to="/dashboard?tab=favorites" className="flex items-center gap-2 cursor-pointer w-full">
                         <Heart className="h-4 w-4" />
                         שמלות שאהבתי
                       </Link>
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem className="text-destructive cursor-pointer">
+                    <DropdownMenuItem 
+                      className="text-destructive cursor-pointer flex items-center gap-2 focus:text-destructive focus:bg-destructive/10"
+                      onClick={handleLogout}
+                    >
+                      <LogOut className="h-4 w-4" />
                       התנתקות
                     </DropdownMenuItem>
                   </DropdownMenuContent>
@@ -143,19 +164,18 @@ const Navbar = ({ isLoggedIn = false }: NavbarProps) => {
                     <Link 
                       to="/dashboard" 
                       onClick={() => setIsOpen(false)}
-                      className="flex items-center gap-2 py-2 text-lg font-medium"
+                      className="flex items-center gap-2 py-2 text-lg font-medium bg-primary/5 rounded-lg px-3 text-primary"
                     >
                       <LayoutDashboard className="h-5 w-5" />
-                      האזור האישי
+                      האזור האישי (עריכת פרופיל)
                     </Link>
-                    <Link 
-                      to="/dashboard?tab=favorites" 
-                      onClick={() => setIsOpen(false)}
-                      className="flex items-center gap-2 py-2 text-lg font-medium"
+                    <button 
+                       onClick={handleLogout}
+                       className="flex items-center gap-2 py-2 text-lg font-medium text-destructive px-3"
                     >
-                      <Heart className="h-5 w-5" />
-                      שמלות שאהבתי
-                    </Link>
+                      <LogOut className="h-5 w-5" />
+                      התנתקות
+                    </button>
                   </div>
                 ) : (
                   <Link to="/login" onClick={() => setIsOpen(false)}>

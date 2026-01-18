@@ -1,221 +1,224 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Upload, Camera, X, Check } from 'lucide-react';
+import { Upload, Camera, X, Check, Loader2, Sparkles } from 'lucide-react';
 import Layout from '@/components/layout/Layout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { designers, sizes } from '@/data/mockData';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
+import { GoogleGenerativeAI } from "@google/generative-ai";
+
+// אתחול ה-AI
+const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY || '');
 
 const SellPage = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [images, setImages] = useState<string[]>([]);
+  
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [previewUrls, setPreviewUrls] = useState<string[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [aiStatus, setAiStatus] = useState<string>(''); // לחיווי למשתמש
+  
   const [formData, setFormData] = useState({
-    title: '',
-    designer: '',
-    condition: '',
-    size: '',
-    price: '',
-    description: '',
+    title: '', designer: '', condition: '', size: '', price: '', description: '', location: '',
   });
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        toast({ variant: "destructive", title: "גישה מוגבלת", description: "יש להתחבר כדי למכור שמלה" });
+        navigate('/login');
+      }
+    };
+    checkAuth();
+  }, [navigate, toast]);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files) {
-      const newImages = Array.from(files).map((file) => URL.createObjectURL(file));
-      setImages((prev) => [...prev, ...newImages].slice(0, 5));
+      const newFiles = Array.from(files);
+      const newUrls = newFiles.map((file) => URL.createObjectURL(file));
+      setImageFiles((prev) => [...prev, ...newFiles].slice(0, 5));
+      setPreviewUrls((prev) => [...prev, ...newUrls].slice(0, 5));
     }
   };
 
   const removeImage = (index: number) => {
-    setImages((prev) => prev.filter((_, i) => i !== index));
+    setImageFiles((prev) => prev.filter((_, i) => i !== index));
+    setPreviewUrls((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    toast({
-      title: 'המודעה פורסמה בהצלחה! 🎉',
-      description: 'השמלה שלך מופיעה עכשיו באתר',
+  // --- הפונקציות החכמות ---
+  
+  // המרת קובץ לפורמט של ג'מיני
+  const fileToGenerativePart = async (file: File) => {
+    return new Promise<any>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64Data = reader.result as string;
+        resolve({
+          inlineData: {
+            data: base64Data.split(',')[1],
+            mimeType: file.type
+          },
+        });
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
     });
-    navigate('/buy');
+  };
+
+  // יצירת וקטור (Embedding) מטקסט
+  const generateEmbedding = async (text: string) => {
+    const model = genAI.getGenerativeModel({ model: "text-embedding-004" });
+    const result = await model.embedContent(text);
+    return result.embedding.values;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    setAiStatus('מתחילה בתהליך העלאה...');
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("User not authenticated");
+      if (imageFiles.length === 0) throw new Error("חובה להעלות תמונה");
+
+      // 1. העלאת תמונה ל-Storage
+      setAiStatus('מעלה את התמונה לענן...');
+      const mainImageFile = imageFiles[0];
+      const fileName = `${user.id}/${Math.random()}.${mainImageFile.name.split('.').pop()}`;
+      
+      const { error: uploadError } = await supabase.storage.from('dresses').upload(fileName, mainImageFile);
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage.from('dresses').getPublicUrl(fileName);
+
+      // 2. יצירת ניתוח AI עמוק (בשביל הוקטור)
+      setAiStatus('ה-AI מנתח את השמלה לעומק...');
+      const visionModel = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      const imagePart = await fileToGenerativePart(mainImageFile);
+      
+      const prompt = `
+        Describe this wedding dress in extreme visual detail. 
+        Focus on silhouette, neckline, fabric type (lace, satin, tulle), sleeve style, 
+        embellishments (beads, pearls, sequins), and overall vibe (boho, classic, modern).
+        Output a detailed paragraph in English.
+      `;
+      
+      const analysisResult = await visionModel.generateContent([prompt, imagePart]);
+      const detailedDescription = analysisResult.response.text();
+
+      // 3. יצירת וקטור מהתיאור
+      setAiStatus('יוצרת חתימה ויזואלית ייחודית...');
+      const embedding = await generateEmbedding(detailedDescription);
+
+      // 4. שמירה לדאטה-בייס
+      setAiStatus('שומרת את כל הפרטים...');
+      const { error: insertError } = await supabase.from('listings').insert({
+        user_id: user.id,
+        title: formData.title,
+        designer: formData.designer,
+        condition: formData.condition,
+        size: formData.size,
+        price: parseFloat(formData.price),
+        description: formData.description,
+        location: formData.location || 'לא צוין',
+        image_url: publicUrl,
+        embedding: embedding // <--- הוקטור נשמר כאן!
+      });
+
+      if (insertError) throw insertError;
+
+      toast({ title: 'השמלה פורסמה בהצלחה! 🎉', description: 'היא כעת ניתנת לחיפוש במנוע ה-AI שלנו' });
+      navigate('/buy');
+
+    } catch (error: any) {
+      console.error('Error:', error);
+      toast({ variant: "destructive", title: "שגיאה", description: error.message });
+    } finally {
+      setIsSubmitting(false);
+      setAiStatus('');
+    }
   };
 
   return (
     <Layout>
       <div className="min-h-screen bg-gradient-to-b from-cream to-background py-12">
         <div className="container mx-auto px-4 max-w-3xl">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-center mb-10"
-          >
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center mb-10">
             <h1 className="text-3xl md:text-4xl font-bold mb-4">מכרי את השמלה שלך</h1>
             <p className="text-muted-foreground">מלאי את הפרטים והשמלה שלך תפורסם תוך דקות</p>
           </motion.div>
 
-          <motion.form
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            onSubmit={handleSubmit}
-            className="bg-card rounded-2xl p-8 shadow-soft border border-border"
-          >
-            {/* Image Upload */}
+          <form onSubmit={handleSubmit} className="bg-card rounded-2xl p-8 shadow-soft border border-border">
             <div className="mb-8">
               <label className="text-lg font-semibold mb-4 block">תמונות השמלה</label>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
-                {images.map((image, index) => (
+                {previewUrls.map((image, index) => (
                   <div key={index} className="relative aspect-[3/4] rounded-xl overflow-hidden group">
                     <img src={image} alt="" className="w-full h-full object-cover" />
-                    <button
-                      type="button"
-                      onClick={() => removeImage(index)}
-                      className="absolute top-2 left-2 w-8 h-8 bg-destructive text-destructive-foreground rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                    {index === 0 && (
-                      <div className="absolute bottom-2 right-2 bg-primary text-primary-foreground text-xs px-2 py-1 rounded">
-                        ראשית
-                      </div>
-                    )}
+                    <button type="button" onClick={() => removeImage(index)} className="absolute top-2 left-2 w-8 h-8 bg-destructive text-destructive-foreground rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><X className="h-4 w-4" /></button>
                   </div>
                 ))}
-                {images.length < 5 && (
+                {previewUrls.length < 5 && (
                   <label className="aspect-[3/4] rounded-xl border-2 border-dashed border-primary/30 hover:border-primary cursor-pointer flex flex-col items-center justify-center gap-2 transition-colors bg-cream">
-                    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-                      <Camera className="h-6 w-6 text-primary" />
-                    </div>
+                    <Camera className="h-6 w-6 text-primary" />
                     <span className="text-sm text-muted-foreground">הוסיפי תמונה</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      onChange={handleImageUpload}
-                      className="hidden"
-                    />
+                    <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
                   </label>
                 )}
               </div>
-              <p className="text-sm text-muted-foreground mt-3">עד 5 תמונות. תמונה ראשונה תוצג כתמונה הראשית</p>
             </div>
 
-            {/* Form Fields */}
             <div className="space-y-6">
-              <div>
-                <label className="font-medium mb-2 block">כותרת המודעה</label>
-                <Input
-                  placeholder='לדוגמה: "שמלת A-Line תחרה מעוצבת"'
-                  value={formData.title}
-                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                  className="input-elegant"
-                  required
-                />
+              <Input placeholder='כותרת המודעה' value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} required />
+              <div className="grid grid-cols-2 gap-6">
+                <Select value={formData.designer} onValueChange={(v) => setFormData({ ...formData, designer: v })}>
+                  <SelectTrigger><SelectValue placeholder="מעצב/ת" /></SelectTrigger>
+                  <SelectContent>{designers.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}<SelectItem value="other">אחר</SelectItem></SelectContent>
+                </Select>
+                <Input type="number" placeholder="מחיר (₪)" value={formData.price} onChange={(e) => setFormData({ ...formData, price: e.target.value })} required />
               </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                <div>
-                  <label className="font-medium mb-2 block">מעצב/ת</label>
-                  <Select 
-                    value={formData.designer} 
-                    onValueChange={(value) => setFormData({ ...formData, designer: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="בחרי מעצב/ת" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {designers.map((designer) => (
-                        <SelectItem key={designer} value={designer}>
-                          {designer}
-                        </SelectItem>
-                      ))}
-                      <SelectItem value="other">אחר</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <label className="font-medium mb-2 block">מצב השמלה</label>
-                  <Select 
-                    value={formData.condition} 
-                    onValueChange={(value) => setFormData({ ...formData, condition: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="בחרי מצב" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="new">חדשה (עם תג)</SelectItem>
-                      <SelectItem value="once">נלבשה פעם אחת</SelectItem>
-                      <SelectItem value="used">נלבשה מספר פעמים</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <label className="font-medium mb-2 block">מידה</label>
-                  <Select 
-                    value={formData.size} 
-                    onValueChange={(value) => setFormData({ ...formData, size: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="בחרי מידה" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {sizes.map((size) => (
-                        <SelectItem key={size} value={size.toString()}>
-                          מידה {size}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <label className="font-medium mb-2 block">מחיר (₪)</label>
-                  <Input
-                    type="number"
-                    placeholder="הכניסי מחיר"
-                    value={formData.price}
-                    onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-                    className="input-elegant"
-                    required
-                  />
-                </div>
+              <div className="grid grid-cols-2 gap-6">
+                 <Select value={formData.size} onValueChange={(v) => setFormData({ ...formData, size: v })}>
+                  <SelectTrigger><SelectValue placeholder="מידה" /></SelectTrigger>
+                  <SelectContent>{sizes.map(s => <SelectItem key={s} value={s.toString()}>{s}</SelectItem>)}</SelectContent>
+                </Select>
+                <Input placeholder="מיקום" value={formData.location} onChange={(e) => setFormData({ ...formData, location: e.target.value })} required />
               </div>
-
-              <div>
-                <label className="font-medium mb-2 block">תיאור השמלה</label>
-                <Textarea
-                  placeholder="תארי את השמלה, מצבה, היסטוריה, ופרטים נוספים שיעזרו לקונות..."
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="input-elegant min-h-[150px]"
-                  required
-                />
-              </div>
+               <Select value={formData.condition} onValueChange={(v) => setFormData({ ...formData, condition: v })}>
+                  <SelectTrigger><SelectValue placeholder="מצב השמלה" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="new">חדשה</SelectItem>
+                    <SelectItem value="used">משומשת</SelectItem>
+                  </SelectContent>
+                </Select>
+              <Textarea placeholder="תיאור חופשי..." value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} required />
             </div>
 
-            {/* Submit */}
-            <div className="mt-10 flex flex-col sm:flex-row gap-4">
-              <Button type="submit" variant="gold" size="xl" className="flex-1">
-                <Check className="h-5 w-5" />
-                פרסמי את השמלה
-              </Button>
-              <Button type="button" variant="outline" size="xl" onClick={() => navigate(-1)}>
-                ביטול
+            <div className="mt-10">
+              <Button type="submit" variant="gold" size="xl" className="w-full" disabled={isSubmitting}>
+                {isSubmitting ? (
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="animate-spin" />
+                    {aiStatus}
+                  </span>
+                ) : (
+                  <>פרסמי את השמלה <Sparkles className="mr-2 h-4 w-4" /></>
+                )}
               </Button>
             </div>
-          </motion.form>
+          </form>
         </div>
       </div>
     </Layout>

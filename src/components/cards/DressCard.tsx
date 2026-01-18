@@ -1,111 +1,86 @@
-import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { Heart, MapPin } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import type { Dress } from '@/data/mockData';
+import { Heart } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
-interface DressCardProps {
-  dress: Dress;
-  showMatchBadge?: boolean;
+// עדכון ה-Interface שיכיל את כל האפשרויות
+export interface DressCardProps {
+  id?: string | number; // הוספנו את זה
+  title?: string;
+  price?: number;
+  image?: string;
+  designer?: string;
+  size?: string;
+  condition?: string;
+  // אופציונלי: תמיכה גם באובייקט שלם
+  dress?: {
+    id: string | number;
+    title: string;
+    price: number;
+    images: string[];
+    designer: string;
+    size: number;
+    condition: string;
+  };
 }
 
-const DressCard = ({ dress, showMatchBadge = false }: DressCardProps) => {
-  const [isLiked, setIsLiked] = useState(false);
-  const [imageLoaded, setImageLoaded] = useState(false);
+const DressCard = (props: DressCardProps) => {
+  // נרמול הנתונים: או שזה בא מ-props בודדים או מהאובייקט dress
+  const data = props.dress ? {
+    id: props.dress.id,
+    title: props.dress.title,
+    price: props.dress.price,
+    image: props.dress.images[0],
+    designer: props.dress.designer,
+    size: props.dress.size,
+    condition: props.dress.condition
+  } : {
+    id: props.id,
+    title: props.title,
+    price: props.price,
+    image: props.image,
+    designer: props.designer,
+    size: props.size,
+    condition: props.condition
+  };
 
-  const discount = dress.originalPrice 
-    ? Math.round(((dress.originalPrice - dress.price) / dress.originalPrice) * 100)
-    : 0;
+  if (!data.title) return null; // הגנה
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      whileHover={{ y: -5 }}
-      transition={{ duration: 0.3 }}
-      className="card-elegant group"
-    >
-      <Link to={`/product/${dress.id}`}>
-        <div className="relative aspect-[3/4] overflow-hidden bg-cream">
-          {!imageLoaded && (
-            <div className="absolute inset-0 bg-cream animate-pulse" />
-          )}
-          <img
-            src={dress.images[0]}
-            alt={dress.title}
-            className={cn(
-              'w-full h-full object-cover transition-transform duration-500 group-hover:scale-105',
-              imageLoaded ? 'opacity-100' : 'opacity-0'
-            )}
-            onLoad={() => setImageLoaded(true)}
-          />
-          
-          {/* Match Badge */}
-          {showMatchBadge && dress.matchPercentage && (
-            <div className="match-badge">
-              {dress.matchPercentage}% התאמה
-            </div>
-          )}
-
-          {/* Discount Badge */}
-          {discount > 0 && !showMatchBadge && (
-            <div className="absolute top-3 left-3 bg-destructive text-destructive-foreground px-3 py-1 rounded-full text-sm font-medium">
-              -{discount}%
-            </div>
-          )}
-
-          {/* Like Button */}
-          <motion.button
-            whileTap={{ scale: 0.9 }}
-            onClick={(e) => {
-              e.preventDefault();
-              setIsLiked(!isLiked);
-            }}
-            className={cn(
-              'absolute top-3 right-3 w-10 h-10 rounded-full flex items-center justify-center transition-all',
-              isLiked 
-                ? 'bg-primary text-primary-foreground' 
-                : 'bg-background/90 text-foreground hover:bg-primary hover:text-primary-foreground'
-            )}
-          >
-            <Heart className={cn('h-5 w-5', isLiked && 'fill-current')} />
-          </motion.button>
-        </div>
+    <div className="group relative bg-white rounded-xl border border-border overflow-hidden hover:shadow-lg transition-all duration-300">
+      {/* תמונה וקישור */}
+      <Link to={`/product/${data.id}`} className="block relative aspect-[3/4] overflow-hidden bg-gray-100">
+        <img
+          src={data.image || '/placeholder.svg'}
+          alt={data.title}
+          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+        />
+        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
+        
+        {/* כפתור לייק */}
+        <button className="absolute top-3 right-3 p-2 rounded-full bg-white/80 hover:bg-white text-gray-500 hover:text-red-500 transition-all opacity-0 group-hover:opacity-100">
+          <Heart className="w-4 h-4" />
+        </button>
       </Link>
 
-      {/* Info */}
+      {/* פרטים */}
       <div className="p-4">
-        <Link to={`/product/${dress.id}`}>
-          <h3 className="font-semibold text-foreground mb-1 hover:text-primary transition-colors line-clamp-1">
-            {dress.title}
-          </h3>
-        </Link>
-        <p className="text-muted-foreground text-sm mb-2">{dress.designer}</p>
-        
-        <div className="flex items-center justify-between">
-          <div className="flex flex-col">
-            <span className="text-lg font-bold text-primary">
-              ₪{dress.price.toLocaleString()}
-            </span>
-            {dress.originalPrice && (
-              <span className="text-sm text-muted-foreground line-through">
-                ₪{dress.originalPrice.toLocaleString()}
-              </span>
-            )}
+        <div className="flex justify-between items-start mb-2">
+          <div>
+            <p className="text-xs text-muted-foreground mb-1">{data.designer}</p>
+            <h3 className="font-medium text-base text-secondary truncate max-w-[180px]" title={data.title}>
+              {data.title}
+            </h3>
           </div>
-          
-          <div className="flex items-center gap-3 text-sm text-muted-foreground">
-            <span className="bg-secondary px-2 py-1 rounded">מידה {dress.size}</span>
-          </div>
+          <p className="font-bold text-primary">₪{data.price?.toLocaleString()}</p>
         </div>
 
-        <div className="flex items-center gap-1 mt-3 text-sm text-muted-foreground">
-          <MapPin className="h-4 w-4" />
-          <span>{dress.location}</span>
+        <div className="flex items-center gap-3 text-xs text-muted-foreground mt-3 pt-3 border-t border-gray-100">
+          <span className="bg-cream px-2 py-1 rounded">מידה {data.size}</span>
+          <span>•</span>
+          <span>{data.condition}</span>
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 };
 
