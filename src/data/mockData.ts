@@ -12,7 +12,8 @@ export interface Dress {
   price: number;
   originalPrice?: number;
   size: number;
-  condition: 'חדשה' | 'נלבשה פעם אחת' | 'נלבשה';
+  condition: 'חדשה עם תווית' | 'נלבשה פעם אחת' | 'דגם סטודיו';
+  silhouette: 'נסיכה' | 'A-Line' | 'סירן' | 'בוהו' | 'מינימליסטית';
   location: string;
   description: string;
   images: string[];
@@ -20,6 +21,7 @@ export interface Dress {
     name: string;
     avatar: string;
     location: string;
+    phone: string;
     rating: number;
   };
   matchPercentage?: number;
@@ -49,6 +51,7 @@ export const dresses: Dress[] = [
     originalPrice: 25000,
     size: 38,
     condition: 'נלבשה פעם אחת',
+    silhouette: 'A-Line',
     location: 'תל אביב',
     description: 'שמלת כלה מדהימה בגזרת A-Line עם תחרה עדינה בעבודת יד. השמלה נלבשה פעם אחת בלבד ונמצאת במצב מושלם. כוללת הינומה תואמת.',
     images: [dress1, dress2, dress3],
@@ -56,6 +59,7 @@ export const dresses: Dress[] = [
       name: 'מיכל כהן',
       avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=michal',
       location: 'תל אביב',
+      phone: '0501234567',
       rating: 4.9,
     },
     createdAt: '2024-01-15',
@@ -68,6 +72,7 @@ export const dresses: Dress[] = [
     originalPrice: 35000,
     size: 36,
     condition: 'נלבשה פעם אחת',
+    silhouette: 'סירן',
     location: 'הרצליה',
     description: 'שמלת סירן מרהיבה עם עיטורי חרוזים וגב פתוח. עיצוב ייחודי של גליה להב. במצב מעולה לאחר ניקוי מקצועי.',
     images: [dress2, dress1, dress4],
@@ -75,6 +80,7 @@ export const dresses: Dress[] = [
       name: 'שירה לוי',
       avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=shira',
       location: 'הרצליה',
+      phone: '0527654321',
       rating: 5.0,
     },
     createdAt: '2024-01-10',
@@ -87,6 +93,7 @@ export const dresses: Dress[] = [
     originalPrice: 18000,
     size: 40,
     condition: 'נלבשה פעם אחת',
+    silhouette: 'נסיכה',
     location: 'ירושלים',
     description: 'שמלת נסיכה קסומה עם חצאית טול רחבה ומחוך מעוטר. מושלמת לחתונה קלאסית ורומנטית.',
     images: [dress3, dress5, dress6],
@@ -94,6 +101,7 @@ export const dresses: Dress[] = [
       name: 'נועה ישראלי',
       avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=noa',
       location: 'ירושלים',
+      phone: '0539876543',
       rating: 4.8,
     },
     createdAt: '2024-01-08',
@@ -105,7 +113,8 @@ export const dresses: Dress[] = [
     price: 5500,
     originalPrice: 15000,
     size: 34,
-    condition: 'חדשה',
+    condition: 'חדשה עם תווית',
+    silhouette: 'מינימליסטית',
     location: 'רמת גן',
     description: 'שמלת כלה מינימליסטית עם קווים נקיים וסאטן משובח. מושלמת לכלה המודרנית שמחפשת אלגנטיות פשוטה.',
     images: [dress4, dress1, dress2],
@@ -113,6 +122,7 @@ export const dresses: Dress[] = [
       name: 'יעל ברוך',
       avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=yael',
       location: 'רמת גן',
+      phone: '0541112233',
       rating: 4.7,
     },
     createdAt: '2024-01-05',
@@ -125,6 +135,7 @@ export const dresses: Dress[] = [
     originalPrice: 20000,
     size: 42,
     condition: 'נלבשה פעם אחת',
+    silhouette: 'בוהו',
     location: 'חיפה',
     description: 'שמלת בוהו רומנטית עם שרוולי תחרה ארוכים וגב פתוח. אידיאלית לחתונה בטבע או בחוף.',
     images: [dress5, dress3, dress6],
@@ -132,6 +143,7 @@ export const dresses: Dress[] = [
       name: 'דנה מזרחי',
       avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=dana',
       location: 'חיפה',
+      phone: '0504445566',
       rating: 4.9,
     },
     createdAt: '2024-01-03',
@@ -143,7 +155,8 @@ export const dresses: Dress[] = [
     price: 9500,
     originalPrice: 28000,
     size: 38,
-    condition: 'נלבשה פעם אחת',
+    condition: 'דגם סטודיו',
+    silhouette: 'נסיכה',
     location: 'ראשון לציון',
     description: 'שמלת נסיכה קלאסית עם מחשוף לב ועיטורי תחרה יפהפיים. כוללת שובל ארוך.',
     images: [dress6, dress4, dress1],
@@ -151,6 +164,7 @@ export const dresses: Dress[] = [
       name: 'רות אברהם',
       avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=ruth',
       location: 'ראשון לציון',
+      phone: '0526667788',
       rating: 4.6,
     },
     createdAt: '2024-01-01',
@@ -219,6 +233,7 @@ export const designers = [
   'מירה צווילינגר',
   'שלומית אזרד',
   'אלון ליבנה',
+  'ליז מרטינז',
 ];
 
 export const locations = [
@@ -233,3 +248,17 @@ export const locations = [
 ];
 
 export const sizes = [34, 36, 38, 40, 42, 44, 46];
+
+export const conditions = [
+  'חדשה עם תווית',
+  'נלבשה פעם אחת',
+  'דגם סטודיו',
+];
+
+export const silhouettes = [
+  'נסיכה',
+  'A-Line',
+  'סירן',
+  'בוהו',
+  'מינימליסטית',
+];

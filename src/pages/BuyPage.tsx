@@ -1,52 +1,89 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Search, SlidersHorizontal, X } from 'lucide-react';
+import { Search } from 'lucide-react';
 import Layout from '@/components/layout/Layout';
 import DressCard from '@/components/cards/DressCard';
-import { Button } from '@/components/ui/button';
+import EmptyState from '@/components/ui/EmptyState';
+import { DesktopFilters, MobileFilters, SortBar } from '@/components/filters/BuyPageFilters';
 import { Input } from '@/components/ui/input';
-import { dresses, designers, locations, sizes } from '@/data/mockData';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { dresses } from '@/data/mockData';
+
+interface FilterState {
+  priceRange: [number, number];
+  designers: string[];
+  conditions: string[];
+  silhouette: string;
+}
 
 const BuyPage = () => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [showFilters, setShowFilters] = useState(false);
-  const [selectedSize, setSelectedSize] = useState<string>('');
-  const [selectedDesigner, setSelectedDesigner] = useState<string>('');
-  const [selectedLocation, setSelectedLocation] = useState<string>('');
-  const [priceRange, setPriceRange] = useState<string>('');
-
-  const filteredDresses = dresses.filter((dress) => {
-    const matchesSearch = dress.title.includes(searchQuery) || 
-                         dress.designer.includes(searchQuery);
-    const matchesSize = !selectedSize || dress.size.toString() === selectedSize;
-    const matchesDesigner = !selectedDesigner || dress.designer === selectedDesigner;
-    const matchesLocation = !selectedLocation || dress.location === selectedLocation;
-    
-    let matchesPrice = true;
-    if (priceRange) {
-      const [min, max] = priceRange.split('-').map(Number);
-      matchesPrice = dress.price >= min && (!max || dress.price <= max);
-    }
-
-    return matchesSearch && matchesSize && matchesDesigner && matchesLocation && matchesPrice;
+  const [sortBy, setSortBy] = useState('newest');
+  const [filters, setFilters] = useState<FilterState>({
+    priceRange: [0, 50000],
+    designers: [],
+    conditions: [],
+    silhouette: '',
   });
 
   const clearFilters = () => {
-    setSelectedSize('');
-    setSelectedDesigner('');
-    setSelectedLocation('');
-    setPriceRange('');
+    setFilters({
+      priceRange: [0, 50000],
+      designers: [],
+      conditions: [],
+      silhouette: '',
+    });
     setSearchQuery('');
   };
 
-  const hasActiveFilters = selectedSize || selectedDesigner || selectedLocation || priceRange;
+  const filteredDresses = useMemo(() => {
+    let result = dresses.filter((dress) => {
+      // Search query
+      const matchesSearch = 
+        !searchQuery ||
+        dress.title.includes(searchQuery) || 
+        dress.designer.includes(searchQuery) ||
+        dress.location.includes(searchQuery);
+      
+      // Price range
+      const matchesPrice = 
+        dress.price >= filters.priceRange[0] && 
+        dress.price <= filters.priceRange[1];
+      
+      // Designers
+      const matchesDesigner = 
+        filters.designers.length === 0 || 
+        filters.designers.includes(dress.designer);
+      
+      // Conditions
+      const matchesCondition = 
+        filters.conditions.length === 0 || 
+        filters.conditions.includes(dress.condition);
+      
+      // Silhouette
+      const matchesSilhouette = 
+        !filters.silhouette || 
+        dress.silhouette === filters.silhouette;
+
+      return matchesSearch && matchesPrice && matchesDesigner && matchesCondition && matchesSilhouette;
+    });
+
+    // Sorting
+    switch (sortBy) {
+      case 'price-low':
+        result = [...result].sort((a, b) => a.price - b.price);
+        break;
+      case 'price-high':
+        result = [...result].sort((a, b) => b.price - a.price);
+        break;
+      case 'newest':
+      default:
+        result = [...result].sort((a, b) => 
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
+    }
+
+    return result;
+  }, [searchQuery, filters, sortBy]);
 
   return (
     <Layout>
@@ -84,132 +121,58 @@ const BuyPage = () => {
         </div>
 
         <div className="container mx-auto px-4 py-8">
-          {/* Filters Toggle & Active Filters */}
-          <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
-            <div className="flex items-center gap-4">
-              <Button
-                variant="outline"
-                onClick={() => setShowFilters(!showFilters)}
-                className="gap-2"
-              >
-                <SlidersHorizontal className="h-4 w-4" />
-                סינון
-              </Button>
-              {hasActiveFilters && (
-                <Button variant="ghost" onClick={clearFilters} className="gap-2 text-destructive">
-                  <X className="h-4 w-4" />
-                  נקי סינון
-                </Button>
+          {/* Mobile Filters */}
+          <MobileFilters
+            filters={filters}
+            onFiltersChange={setFilters}
+            onClearFilters={clearFilters}
+            sortBy={sortBy}
+            onSortChange={setSortBy}
+            resultCount={filteredDresses.length}
+          />
+
+          <div className="flex gap-8">
+            {/* Desktop Sidebar Filters */}
+            <DesktopFilters
+              filters={filters}
+              onFiltersChange={setFilters}
+              onClearFilters={clearFilters}
+              sortBy={sortBy}
+              onSortChange={setSortBy}
+              resultCount={filteredDresses.length}
+            />
+
+            {/* Main Content */}
+            <div className="flex-1">
+              {/* Sort Bar - Desktop */}
+              <SortBar
+                sortBy={sortBy}
+                onSortChange={setSortBy}
+                resultCount={filteredDresses.length}
+              />
+
+              {/* Dress Grid */}
+              {filteredDresses.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
+                  {filteredDresses.map((dress, index) => (
+                    <motion.div
+                      key={dress.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.05 }}
+                    >
+                      <DressCard dress={dress} />
+                    </motion.div>
+                  ))}
+                </div>
+              ) : (
+                <EmptyState 
+                  type="no-results" 
+                  onAction={clearFilters}
+                />
               )}
             </div>
-            <p className="text-muted-foreground">
-              {filteredDresses.length} שמלות נמצאו
-            </p>
           </div>
-
-          {/* Filters */}
-          {showFilters && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="bg-card rounded-xl p-6 mb-8 border border-border"
-            >
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div>
-                  <label className="text-sm font-medium mb-2 block">מידה</label>
-                  <Select value={selectedSize} onValueChange={setSelectedSize}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="כל המידות" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="">כל המידות</SelectItem>
-                      {sizes.map((size) => (
-                        <SelectItem key={size} value={size.toString()}>
-                          מידה {size}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <label className="text-sm font-medium mb-2 block">מעצב/ת</label>
-                  <Select value={selectedDesigner} onValueChange={setSelectedDesigner}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="כל המעצבים" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="">כל המעצבים</SelectItem>
-                      {designers.map((designer) => (
-                        <SelectItem key={designer} value={designer}>
-                          {designer}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <label className="text-sm font-medium mb-2 block">מיקום</label>
-                  <Select value={selectedLocation} onValueChange={setSelectedLocation}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="כל המיקומים" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="">כל המיקומים</SelectItem>
-                      {locations.map((location) => (
-                        <SelectItem key={location} value={location}>
-                          {location}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <label className="text-sm font-medium mb-2 block">טווח מחירים</label>
-                  <Select value={priceRange} onValueChange={setPriceRange}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="כל המחירים" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="">כל המחירים</SelectItem>
-                      <SelectItem value="0-5000">עד ₪5,000</SelectItem>
-                      <SelectItem value="5000-10000">₪5,000 - ₪10,000</SelectItem>
-                      <SelectItem value="10000-15000">₪10,000 - ₪15,000</SelectItem>
-                      <SelectItem value="15000-">מעל ₪15,000</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </motion.div>
-          )}
-
-          {/* Dress Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {filteredDresses.map((dress, index) => (
-              <motion.div
-                key={dress.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.05 }}
-              >
-                <DressCard dress={dress} />
-              </motion.div>
-            ))}
-          </div>
-
-          {filteredDresses.length === 0 && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="text-center py-20"
-            >
-              <p className="text-xl text-muted-foreground mb-4">לא נמצאו שמלות התואמות לחיפוש</p>
-              <Button onClick={clearFilters}>נקי סינון</Button>
-            </motion.div>
-          )}
         </div>
       </div>
     </Layout>
